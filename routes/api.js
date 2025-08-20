@@ -1,105 +1,47 @@
-'use strict';
-const { ObjectId } = require('mongodb');
+const issues = [];
+let idCounter = 1;
 
-module.exports = function (app, db) { // pass your db connection to this module
+module.exports = function(app) {
 
   app.route('/api/issues/:project')
-
-    // GET issues
-    .get(async function (req, res) {
-      const project = req.params.project;
-      const query = { project };
-
-      // Add filters from query params
-      for (let key in req.query) {
-        if (key === 'open') req.query[key] = req.query[key] === 'true';
-        query[key] = req.query[key];
-      }
-
-      try {
-        const issues = await db.collection('issues').find(query).toArray();
-        res.json(issues);
-      } catch (err) {
-        res.status(500).json({ error: 'could not fetch issues' });
-      }
+    .get((req, res) => {
+      res.json(issues.filter(issue => issue.project === req.params.project));
     })
-
-    // POST issue
-    .post(async function (req, res) {
-      const project = req.params.project;
+    .post((req, res) => {
       const { issue_title, issue_text, created_by, assigned_to = '', status_text = '' } = req.body;
-
-      if (!issue_title || !issue_text || !created_by) {
-        return res.json({ error: 'required field(s) missing' });
-      }
-
-      const now = new Date();
+      if (!issue_title || !issue_text || !created_by) return res.json({ error: 'required field(s) missing' });
       const newIssue = {
-        project,
+        _id: (idCounter++).toString(),
+        project: req.params.project,
         issue_title,
         issue_text,
         created_by,
         assigned_to,
         status_text,
-        created_on: now,
-        updated_on: now,
+        created_on: new Date(),
+        updated_on: new Date(),
         open: true
       };
-
-      try {
-        const result = await db.collection('issues').insertOne(newIssue);
-        res.json({ ...newIssue, _id: result.insertedId });
-      } catch (err) {
-        res.status(500).json({ error: 'could not create issue' });
-      }
+      issues.push(newIssue);
+      res.json(newIssue);
     })
-
-    // PUT update issue
-    .put(async function (req, res) {
-      const project = req.params.project;
+    .put((req, res) => {
       const { _id, ...fields } = req.body;
-
       if (!_id) return res.json({ error: 'missing _id' });
-
-      // Remove empty fields
-      const updateFields = {};
-      for (let key in fields) {
-        if (fields[key] !== undefined && fields[key] !== '') updateFields[key] = fields[key];
-      }
-
-      if (Object.keys(updateFields).length === 0) {
-        return res.json({ error: 'no update field(s) sent', _id });
-      }
-
-      updateFields.updated_on = new Date();
-
-      try {
-        const result = await db.collection('issues').updateOne(
-          { _id: ObjectId(_id), project },
-          { $set: updateFields }
-        );
-
-        if (result.matchedCount === 0) return res.json({ error: 'could not update', _id });
-        res.json({ result: 'successfully updated', _id });
-      } catch (err) {
-        res.json({ error: 'could not update', _id });
-      }
+      const issue = issues.find(i => i._id === _id && i.project === req.params.project);
+      if (!issue) return res.json({ error: 'could not update', _id });
+      const updates = Object.keys(fields).filter(k => fields[k] !== undefined && fields[k] !== '');
+      if (updates.length === 0) return res.json({ error: 'no update field(s) sent', _id });
+      updates.forEach(key => issue[key] = fields[key]);
+      issue.updated_on = new Date();
+      res.json({ result: 'successfully updated', _id });
     })
-
-    // DELETE issue
-    .delete(async function (req, res) {
-      const project = req.params.project;
+    .delete((req, res) => {
       const { _id } = req.body;
-
       if (!_id) return res.json({ error: 'missing _id' });
-
-      try {
-        const result = await db.collection('issues').deleteOne({ _id: ObjectId(_id), project });
-        if (result.deletedCount === 0) return res.json({ error: 'could not delete', _id });
-        res.json({ result: 'successfully deleted', _id });
-      } catch (err) {
-        res.json({ error: 'could not delete', _id });
-      }
+      const index = issues.findIndex(i => i._id === _id && i.project === req.params.project);
+      if (index === -1) return res.json({ error: 'could not delete', _id });
+      issues.splice(index, 1);
+      res.json({ result: 'successfully deleted', _id });
     });
-
 };
