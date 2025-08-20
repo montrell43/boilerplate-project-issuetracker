@@ -5,9 +5,21 @@ module.exports = function(app) {
 
   app.route('/api/issues/:project')
     .get((req, res) => {
-      res.json(issues.filter(issue => issue.project === req.params.project));
-    })
-    .post((req, res) => {
+  let filtered = issues.filter(issue => issue.project === req.params.project);
+
+  // Apply query filters
+  for (let key in req.query) {
+    let value = req.query[key];
+    
+    // Convert "open" from string to boolean
+    if (key === 'open') value = value === 'true';
+
+    filtered = filtered.filter(issue => issue[key] == value);
+  }
+
+  res.json(filtered);
+})
+  .post((req, res) => {
       const { issue_title, issue_text, created_by, assigned_to = '', status_text = '' } = req.body;
       if (!issue_title || !issue_text || !created_by) return res.json({ error: 'required field(s) missing' });
       const newIssue = {
@@ -28,9 +40,12 @@ module.exports = function(app) {
     .put((req, res) => {
       const { _id, ...fields } = req.body;
       if (!_id) return res.json({ error: 'missing _id' });
+
       const issue = issues.find(i => i._id === _id && i.project === req.params.project);
       if (!issue) return res.json({ error: 'could not update', _id });
+
       const updates = Object.keys(fields).filter(k => fields[k] !== undefined && fields[k] !== '');
+
       if (updates.length === 0) return res.json({ error: 'no update field(s) sent', _id });
       updates.forEach(key => issue[key] = fields[key]);
       issue.updated_on = new Date();
