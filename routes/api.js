@@ -49,58 +49,60 @@ module.exports = function (app) {
     })
 
     // UPDATE ISSUE
-    // PUT /api/issues/:project
-.put(async (req, res) => {
+    .put((req, res) => {
+  const project = req.params.project;
   const { _id, ...fields } = req.body;
 
+  // 1) missing id
   if (!_id) {
     return res.json({ error: 'missing _id' });
   }
 
-  // check if any valid update fields exist
-  const hasUpdates = Object.keys(fields).some(
-    key => fields[key] !== undefined && fields[key] !== ""
-  );
-  if (!hasUpdates) {
+  // Only count real, non-empty updates; coerce 'open'
+  const allowed = ['issue_title','issue_text','created_by','assigned_to','status_text','open'];
+  const updates = {};
+  for (const key of allowed) {
+    if (fields[key] !== undefined && fields[key] !== '') {
+      updates[key] = key === 'open'
+        ? (fields[key] === true || fields[key] === 'true')
+        : fields[key];
+    }
+  }
+
+  // 2) no update fields sent
+  if (Object.keys(updates).length === 0) {
     return res.json({ error: 'no update field(s) sent', _id });
   }
 
-  try {
-    const updated = await Issue.findByIdAndUpdate(
-      _id,
-      { ...fields, updated_on: new Date() },
-      { new: true }
-    );
-
-    if (!updated) {
-      return res.json({ error: 'could not update', _id });
-    }
-
-    return res.json({ result: 'successfully updated', _id });
-  } catch (err) {
+  // 3) find issue by _id + project
+  const issue = issues.find(i => i._id === _id && i.project === project);
+  if (!issue) {
     return res.json({ error: 'could not update', _id });
   }
+
+  // apply updates + timestamp
+  Object.assign(issue, updates);
+  issue.updated_on = new Date();
+
+  return res.json({ result: 'successfully updated', _id });
 })
 
-// DELETE /api/issues/:project
-.delete(async (req, res) => {
-  const { _id } = req.body;
 
-  if (!_id) {
-    return res.json({ error: 'missing _id' });
-  }
 
-  try {
-    const deleted = await Issue.findByIdAndDelete(_id);
 
-    if (!deleted) {
-      return res.json({ error: 'could not delete', _id });
-    }
+    // DELETE ISSUE
+    .delete((req, res) => {
+      const { _id } = req.body;
 
-    return res.json({ result: 'successfully deleted', _id });
-  } catch (err) {
-    return res.json({ error: 'could not delete', _id });
-  }
-});
+      if (!_id) return res.json({ error: 'missing _id' });
+
+      const index = issues.findIndex(i => i._id === _id && i.project === req.params.project);
+
+      if (index === -1) return res.json({ error: 'could not delete', _id });
+
+      issues.splice(index, 1);
+
+      res.json({ result: 'successfully deleted', _id });
+    });
 
 };
