@@ -101,14 +101,15 @@ module.exports = function (app) {
     })
 
     // UPDATE ISSUE
-    .put((req, res) => {
+    // PUT /api/issues/:project
+.put(async (req, res) => {
   const { _id, ...fields } = req.body;
 
   if (!_id) {
     return res.json({ error: 'missing _id' });
   }
 
-  // Check if no update fields are provided
+  // check if any valid update fields exist
   const hasUpdates = Object.keys(fields).some(
     key => fields[key] !== undefined && fields[key] !== ""
   );
@@ -116,21 +117,42 @@ module.exports = function (app) {
     return res.json({ error: 'no update field(s) sent', _id });
   }
 
-  const issue = issues.find(i => i._id === _id && i.project === req.params.project);
+  try {
+    const updated = await Issue.findByIdAndUpdate(
+      _id,
+      { ...fields, updated_on: new Date() },
+      { new: true }
+    );
 
-  if (!issue) {
+    if (!updated) {
+      return res.json({ error: 'could not update', _id });
+    }
+
+    return res.json({ result: 'successfully updated', _id });
+  } catch (err) {
     return res.json({ error: 'could not update', _id });
   }
+})
 
-  // Apply updates
-  Object.keys(fields).forEach(key => {
-    if (fields[key] !== undefined && fields[key] !== "") {
-      issue[key] = fields[key];
+// DELETE /api/issues/:project
+.delete(async (req, res) => {
+  const { _id } = req.body;
+
+  if (!_id) {
+    return res.json({ error: 'missing _id' });
+  }
+
+  try {
+    const deleted = await Issue.findByIdAndDelete(_id);
+
+    if (!deleted) {
+      return res.json({ error: 'could not delete', _id });
     }
-  });
-  issue.updated_on = new Date();
 
-  return res.json({ result: 'successfully updated', _id });
+    return res.json({ result: 'successfully deleted', _id });
+  } catch (err) {
+    return res.json({ error: 'could not delete', _id });
+  }
 })
 
     // DELETE ISSUE
@@ -147,10 +169,38 @@ module.exports = function (app) {
 
       res.json({ result: 'successfully deleted', _id });
     });
-  }
-})
-}
 
-  
+};
 
 
+    try {
+      // attempt update
+      const updated = await Issue.findByIdAndUpdate(
+        _id,
+        { ...fields, updated_on: new Date() },
+        { new: true }
+      );
+      if (!updated) {
+        return res.json({ error: 'could not update', _id });
+      }
+      return res.json({ result: 'successfully updated', _id });
+    } catch (err) {
+      return res.json({ error: 'could not update', _id });
+    }
+  })
+    // DELETE ISSUE
+    .delete((req, res) => {
+      const { _id } = req.body;
+
+      if (!_id) return res.json({ error: 'missing _id' });
+
+      const index = issues.findIndex(i => i._id === _id && i.project === req.params.project);
+
+      if (index === -1) return res.json({ error: 'could not delete', _id });
+
+      issues.splice(index, 1);
+
+      res.json({ result: 'successfully deleted', _id });
+    });
+
+};
