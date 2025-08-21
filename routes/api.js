@@ -147,24 +147,10 @@ module.exports = function (app) {
 
       res.json({ result: 'successfully deleted', _id });
     });
+  }
+})
+}
 
-};
+  
 
 
-    try {
-      // attempt update
-      const updated = await Issue.findByIdAndUpdate(
-        _id,
-        { ...fields, updated_on: new Date() },
-        { new: true }
-      );
-      if (!updated) {
-        return res.json({ error: 'could not update', _id });
-      }
-      return res.json({ result: 'successfully updated', _id });
-    } catch (err) {
-      return res.json({ error: 'could not update', _id });
-    }
-  })
-   
-};
