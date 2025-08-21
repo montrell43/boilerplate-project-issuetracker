@@ -49,26 +49,41 @@ module.exports = function (app) {
     })
 
     // UPDATE ISSUE
-    .put((req, res) => {
-      const { _id, ...fields } = req.body;
+    .put(async (req, res) => {
+  const { _id, ...fields } = req.body;
 
-      if (!_id) return res.json({ error: 'missing _id' });
+  if (!_id) {
+    return res.json({ error: 'missing _id' });
+  }
 
-      const issue = issues.find(i => i._id === _id && i.project === req.params.project);
+  // Remove _id and check if any field has a non-empty value
+  const updates = {};
+  for (let key in fields) {
+    if (fields[key] !== undefined && fields[key] !== "") {
+      updates[key] = fields[key];
+    }
+  }
 
-      if (!issue) return res.json({ error: 'could not update', _id });
+  if (Object.keys(updates).length === 0) {
+    return res.json({ error: 'no update field(s) sent', _id });
+  }
 
-      const updates = Object.keys(fields).filter(
-        k => fields[k] !== undefined && fields[k] !== ''
-      );
+  try {
+    const updated = await Issue.findByIdAndUpdate(
+      _id,
+      { ...updates, updated_on: new Date() },
+      { new: true }
+    );
 
-      if (updates.length === 0) return res.json({ error: 'no update field(s) sent', _id });
+    if (!updated) {
+      return res.json({ error: 'could not update', _id });
+    }
 
-      updates.forEach(key => issue[key] = fields[key]);
-      issue.updated_on = new Date();
-
-      res.json({ result: 'successfully updated', _id });
-    })
+    return res.json({ result: 'successfully updated', _id });
+  } catch (err) {
+    return res.json({ error: 'could not update', _id });
+  }
+})
 
     // DELETE ISSUE
     .delete((req, res) => {
